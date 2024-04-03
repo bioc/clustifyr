@@ -27,6 +27,8 @@ reference:
 - title: Object wrappers
   desc:  Retrieving metadata and reference building from supported object types
   contents:
+  - sce_pbmc
+  - so_pbmc
   - seurat_meta
   - seurat_ref
   - object_ref
