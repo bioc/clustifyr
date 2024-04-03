@@ -1,3 +1,73 @@
+#' An example Seurat object
+#' 
+#' @return a Seurat object populated with data
+#' from the [pbmc_matrix_small] scRNA-seq dataset, additionally
+#' annotated with cluster assignments.
+#' 
+#' @importFrom SeuratObject CreateSeuratObject CreateDimReducObject VariableFeatures
+#' @export
+so_pbmc <- function() {
+  x <- pbmc_example_data()
+  so <- SeuratObject::CreateSeuratObject(x$mat,
+                                         meta.data = x$metadata) 
+  umap_dr <- SeuratObject::CreateDimReducObject(embeddings = x$umap,
+                                                key = "umap_",
+                                                assay = "RNA")
+  if(is_seurat_v5()) {
+    so <- SeuratObject::SetAssayData(so,
+      "data", 
+      SeuratObject::LayerData(so, layer = "counts")
+    )
+  } else {
+    so <- SeuratObject::SetAssayData(so,
+      "data", 
+      SeuratObject::GetAssayData(so, slot = "counts")
+    )
+  }
+  so[["umap"]] <- umap_dr
+  SeuratObject::VariableFeatures(so) <- x$vargenes
+  so
+}
+  
+#' An example SingleCellExperiment object
+#' 
+#' @return a SingleCellExperiment object populated with data
+#' from the [pbmc_matrix_small] scRNA-seq dataset, additionally
+#' annotated with cluster assignments.
+#' 
+#' @export
+sce_pbmc <- function() {
+  x <- pbmc_example_data()
+  md <- x$metadata[, c(1:5, 7)]
+  # rename to more sce-like names
+  colnames(md) <- c("cell_source", 
+                    "sum",
+                    "detected",
+                    "subsets_Mito_percent",
+                    "clusters",
+                    "cell_type")
+  SingleCellExperiment::SingleCellExperiment(list(counts = x$mat,
+                                                  logcounts = x$mat), 
+                                             colData = md,
+                                             reducedDims = list(
+                                               UMAP = x$umap
+                                             ))
+}
+
+pbmc_example_data <- function() {
+  mat <- clustifyr::pbmc_matrix_small
+  md <- clustifyr::pbmc_meta
+  umap_cols <- c("UMAP_1", "UMAP_2")
+  umap <- as.matrix(md[, umap_cols])
+  md <- md[, setdiff(colnames(md), umap_cols)]
+  vargenes <- clustifyr::pbmc_vargenes
+  
+  list(mat = mat,
+       metadata = md,
+       umap = umap,
+       vargenes = vargenes)
+}
+
 #' Function to access object data
 #' @return expression matrix, with genes as row names,
 #' and cell types as column names
@@ -7,15 +77,15 @@ object_data <- function(object, ...) {
 }
 
 #' @rdname object_data
-#' @param object object after tsne or umap projections
-#'  and clustering
+#' @param object SingleCellExperiment or Seurat object 
 #' @param slot data to access
 #' @param n_genes number of genes limit for Seurat variable genes, by default 1000,
 #'   set to 0 to use all variable genes (generally not recommended)
 #' @param ... additional arguments
 #' @examples
+#' so <- so_pbmc()
 #' mat <- object_data(
-#'     object = s_small3,
+#'     object = so,
 #'     slot = "data"
 #' )
 #' mat[1:3, 1:3]
@@ -25,35 +95,14 @@ object_data.Seurat <- function(object,
     n_genes = 1000,
     ...) {
     if (slot == "data") {
-        temp <- tryCatch(object@assays$RNA@data,
-                         error = function(e) {
-                             message("detected spatial data, using raw counts")
-                             object@assays$Spatial@counts
-                             })
+        temp <- get_seurat_matrix(object, ...)
         return(temp)
     } else if (slot == "meta.data") {
         return(object@meta.data)
     } else if (slot == "var.genes") {
-        vars <- tryCatch(object@assays$RNA@var.features,
-                         error = function(e) {
-                             object@assays$SCT@var.features 
-                         })
-        if (length(vars) <= 1) {
-            message("trying to find variable genes in SCT assay")
-            vars <- tryCatch(object@assays$SCT@var.features,
-                             error = function(e) {NA})
-        } 
-        if (length(vars) <= 1) {
-            message("trying to find variable genes in integrated assay")
-            vars <- tryCatch(object@assays$integrated@var.features,
-                             error = function(e) {NA})
-        }
-        if (length(vars) <= 1) {
-            message("trying to find variable genes in Spatial assay")
-            vars <- tryCatch(object@assays$Spatial@var.features,
-                             error = function(e) {NA})
-        }
-        if (length(vars) <= 1) {
+        vars <- SeuratObject::VariableFeatures(object)
+       
+        if (is.null(vars) || length(vars) <= 1) {
             message("variable genes not found, please manually specify with query_genes argument")
         }
         if ((length(vars) > n_genes) & (n_genes > 0)) {
@@ -61,9 +110,57 @@ object_data.Seurat <- function(object,
         }
         
         return(vars)
-    } else if (slot == "pca") {
-        return(object@reductions$pca@feature.loadings)
+    } else {
+      stop(slot, " access method not implemented")
     }
+}
+
+#' @importFrom utils packageVersion
+is_seurat_v5 <- function() {
+  utils::packageVersion("SeuratObject") >= '5.0.0'
+}
+
+extract_v5_matrix <- function(x, ...) {
+  ob_layers <- SeuratObject::Layers(x)
+  if("data" %in% ob_layers) {
+    res <- SeuratObject::LayerData(x, layer = "data", ...)
+  } else if ("counts" %in% ob_layers) {
+    message("Unable to find 'data' layer, using 'count' layer instead")
+    res <- SeuratObject::LayerData(x, layer = "counts", ...)
+  } else {
+    da <- DefaultAssay(x)
+    stop("\nUnable to find data or count layer in ", da, " Assay of SeuratObject\n",
+         "Extracting data from V5 objects with multiple count\n",
+         "or data layers is not supported")
+  }
+  res
+}
+
+extract_v4_matrix <- function(x) {
+  res <- SeuratObject::GetAssayData(x, layer = "data")
+  
+  if(length(res) == 0) {
+    message("Unable to find 'data' slot, using 'count' slot instead")
+    res <- SeuratObject::GetAssayData(x, layer = "count")
+  }
+  
+  res
+}
+
+get_seurat_matrix <- function(x, warn = TRUE) {
+  
+  ob_assay <- SeuratObject::DefaultAssay(x)
+  if(warn && ob_assay != "RNA") {
+    warning("Default assay of input Seurat object is ", ob_assay, "\n",
+            "Data will be used from this assay rather than RNA")
+  }
+  
+  if(is_seurat_v5()) {
+    res <- extract_v5_matrix(x)
+  } else {
+    res <- extract_v4_matrix(x)
+  }
+  res
 }
 
 #' @rdname object_data
@@ -73,8 +170,9 @@ object_data.Seurat <- function(object,
 #' @param ... additional arguments
 #' @importFrom SingleCellExperiment logcounts colData
 #' @examples
+#' sce <- sce_pbmc()
 #' mat <- object_data(
-#'     object = sce_small,
+#'     object = sce,
 #'     slot = "data"
 #' )
 #' mat[1:3, 1:3]
@@ -86,6 +184,8 @@ object_data.SingleCellExperiment <- function(object,
         return(SingleCellExperiment::logcounts(object))
     } else if (slot == "meta.data") {
         return(as.data.frame(SingleCellExperiment::colData(object)))
+    } else {
+        stop(slot, " access method not implemented")
     }
 }
 
@@ -102,21 +202,18 @@ write_meta <- function(object, ...) {
 #' @param meta new metadata dataframe
 #' @param ... additional arguments
 #' @examples
+#' so <- so_pbmc()
 #' obj <- write_meta(
-#'     object = s_small3,
-#'     meta = seurat_meta(s_small3)
+#'     object = so,
+#'     meta = seurat_meta(so)
 #' )
 #' @export
 write_meta.Seurat <- function(object,
     meta,
     ...) {
-    if ("SeuratObject" %in% loadedNamespaces()) {
-        object_new <- object
-        object_new@meta.data <- meta
-        return(object_new)
-    } else {
-        message("SeuratObject not loaded")
-    }
+    object_new <- object
+    object_new@meta.data <- meta
+    object_new
 }
 
 #' @rdname write_meta
@@ -126,29 +223,27 @@ write_meta.Seurat <- function(object,
 #' @param ... additional arguments
 #' @importFrom SingleCellExperiment colData
 #' @importFrom S4Vectors DataFrame
-#' @importFrom SummarizedExperiment `colData<-`
+#' @importFrom SummarizedExperiment colData<-
 #' @examples
+#' sce <- sce_pbmc()
 #' obj <- write_meta(
-#'     object = sce_small,
-#'     meta = object_data(sce_small, "meta.data")
+#'     object = sce,
+#'     meta = object_data(sce, "meta.data")
 #' )
 #' @export
 write_meta.SingleCellExperiment <- function(object,
     meta,
     ...) {
-    if ("SingleCellExperiment" %in% loadedNamespaces()) {
-        colData(object) <- S4Vectors::DataFrame(meta)
-        return(object)
-    } else {
-        message("SingleCellExperiment not loaded")
-    }
+    colData(object) <- S4Vectors::DataFrame(meta)
+    object
 }
 
 #' Function to convert labelled seurat object to avg expression matrix
 #' @return reference expression matrix, with genes as row names,
 #' and cell types as column names
 #' @examples 
-#' ref <- seurat_ref(s_small3, cluster_col = "RNA_snn_res.1")
+#' so <- so_pbmc()
+#' ref <- seurat_ref(so, cluster_col = "seurat_clusters")
 #' @export
 seurat_ref <- function(seurat_object, ...) {
     UseMethod("seurat_ref", seurat_object)
@@ -189,11 +284,15 @@ seurat_ref.Seurat <- function(seurat_object,
         }
 
         if (!is.null(assay_name)) {
+            og_assay <- SeuratObject::DefaultAssay(seurat_object)
+            assay_name <- setdiff(assay_name, og_assay)
             temp_mat <- temp_mat[0, ]
             for (element in assay_name) {
-                temp_mat2 <- seurat_object@assays[[element]]@counts
+                SeuratObject::DefaultAssay(seurat_object) <- element
+                temp_mat2 <- object_data(seurat_object, "data", warn = FALSE)
                 temp_mat <- rbind(temp_mat, as.matrix(temp_mat2))
             }
+            SeuratObject::DefaultAssay(seurat_object) <- og_assay
         }
     } else {
         stop("warning, not seurat3 object")
@@ -214,7 +313,8 @@ seurat_ref.Seurat <- function(seurat_object,
 #' Function to convert labelled seurat object to fully prepared metadata
 #' @return dataframe of metadata, including dimension reduction plotting info
 #' @examples
-#' m <- seurat_meta(s_small3)
+#' so <- so_pbmc()
+#' m <- seurat_meta(so)
 #' @export
 seurat_meta <- function(seurat_object, ...) {
     UseMethod("seurat_meta", seurat_object)
@@ -278,9 +378,10 @@ object_ref <- function(input, ...) {
 #' averaging will be done on unlogged data
 #' @param ... additional arguments
 #' @examples
+#' so <- so_pbmc()
 #' object_ref(
-#'     s_small3,
-#'     cluster_col = "RNA_snn_res.1"
+#'     so,
+#'     cluster_col = "seurat_clusters"
 #' )
 #' @export
 object_ref.default <- function(input,

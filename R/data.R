@@ -43,24 +43,6 @@
 #' @source `[pbmc_matrix]` processed by Seurat
 "pbmc_vargenes"
 
-#' Small clustered Seurat2 object
-#'
-#' @family data
-#' @source  `[pbmc_small]` processed by seurat
-"s_small"
-
-#' Small clustered Seurat3 object
-#'
-#' @family data
-#' @source  `[pbmc_small]` processed by Seurat
-"s_small3"
-
-#' Small SingleCellExperiment object
-#'
-#' @family data
-#' @source \url{https://github.com/hemberg-lab/scRNA.seq.datasets/blob/master/R/segerstolpe.R}
-"sce_small"
-
 #' reference matrix from seurat citeseq CBMC tutorial
 #'
 #' @family data
@@ -72,12 +54,6 @@
 #' @family data
 #' @source \url{https://satijalab.org/seurat/v3.0/multimodal_vignette.html#identify-differentially-expressed-proteins-between-clusters}
 "cbmc_m"
-
-#' lookup table for single cell object structures
-#'
-#' @family data
-#' @source  various packages
-"object_loc_lookup"
 
 #' table of references stored in clustifyrdata
 #'

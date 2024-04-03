@@ -1,3 +1,32 @@
+#' Check package is installed
+#' @param pkg package to query
+#' @return logical(1) indicating if package is available.
+#' @noRd
+is_pkg_available <- function(pkg, 
+                             action = c("none", "message", "warn", "error"),
+                             msg = "") {
+  has_pkg <- requireNamespace(pkg, quietly = TRUE)
+  action <- match.arg(action)
+  
+  if(!has_pkg) {
+    switch(action, 
+           message = message(pkg,
+                             " not installed ",
+                             msg),
+           warn    = warning(pkg, 
+                             " not installed ",
+                             msg, 
+                             call. = FALSE),
+           error   = stop(pkg, 
+                          " not installed and is required for this function ",
+                          msg,
+                          call. = FALSE),
+    )
+  }
+  has_pkg
+}
+
+
 #' Overcluster by kmeans per cluster
 #'
 #' @param mat expression matrix
@@ -372,7 +401,7 @@ get_best_str <- function(name,
 #' Find entries shared in all vectors
 #' @description return entries found in all supplied vectors.
 #'  If the vector supplied is NULL or NA, then it will be excluded
-#'  from the comparision.
+#'  from the comparison.
 #' @param ... vectors
 #' @return vector of shared elements
 get_common_elements <- function(...) {
@@ -569,7 +598,8 @@ cor_to_call_topn <- function(cor_mat,
                 dplyr::select(df_temp_full, -c(
                     !!dplyr::sym("type"), !!dplyr::sym("r")
                 )),
-                by = stats::setNames(collapse_to_cluster, "type2")
+                by = stats::setNames(collapse_to_cluster, "type2"),
+                relationship = "many-to-many"
             )
         df_temp_full <-
             dplyr::mutate(df_temp_full2, type = tidyr::replace_na(
@@ -720,16 +750,17 @@ gene_pct_markerm <- function(matrix,
 #'
 #' @examples
 #'
-#' # Seurat3
+#' # Seurat
+#' so <- so_pbmc()
 #' clustify_nudge(
-#'     input = s_small3,
+#'     input = so,
 #'     ref_mat = cbmc_ref,
 #'     marker = cbmc_m,
-#'     cluster_col = "RNA_snn_res.1",
+#'     cluster_col = "seurat_clusters",
 #'     threshold = 0.8,
-#'     seurat_out = FALSE,
+#'     obj_out = FALSE,
 #'     mode = "pct",
-#'     dr = "tsne"
+#'     dr = "umap"
 #' )
 #'
 #' # Matrix
@@ -775,7 +806,7 @@ clustify_nudge <- function(input, ...) {
 #'  in preprocessed matrix form
 #' @param mode use marker expression pct or ranked cor score for nudging
 #' @param obj_out whether to output object instead of cor matrix
-#' @param seurat_out output cor matrix or called seurat object
+#' @param seurat_out output cor matrix or called seurat object (deprecated, use obj_out)
 #' @param rename_prefix prefix to add to type and r column names
 #' @param lookuptable if not supplied, will look in built-in
 #' table for object parsing
@@ -793,7 +824,6 @@ clustify_nudge.default <- function(input,
     query_genes = NULL,
     compute_method = "spearman",
     weight = 1,
-    seurat_out = FALSE,
     threshold = -Inf,
     dr = "umap",
     norm = "diff",
@@ -801,6 +831,7 @@ clustify_nudge.default <- function(input,
     marker_inmatrix = TRUE,
     mode = "rank",
     obj_out = FALSE,
+    seurat_out = obj_out,
     rename_prefix = NULL,
     lookuptable = NULL,
     ...) {
@@ -843,7 +874,7 @@ clustify_nudge.default <- function(input,
         metadata = metadata,
         cluster_col = cluster_col,
         query_genes = query_genes,
-        seurat_out = FALSE,
+        obj_out = FALSE,
         per_cell = FALSE
     )
 
@@ -877,9 +908,8 @@ clustify_nudge.default <- function(input,
 
     res <- resa[order(rownames(resa)), order(colnames(resa))] +
         resb[order(rownames(resb)), order(colnames(resb))] * weight
-
-    if ((obj_out ||
-        seurat_out) &&
+    obj_out <- seurat_out
+    if (obj_out &&
         !inherits(input_original, c("matrix", "Matrix", "data.frame"))) {
         df_temp <- cor_to_call(
             res,
@@ -924,8 +954,8 @@ clustify_nudge.Seurat <- function(input,
     query_genes = NULL,
     compute_method = "spearman",
     weight = 1,
-    seurat_out = TRUE,
-    obj_out = FALSE,
+    obj_out = TRUE,
+    seurat_out = obj_out,
     threshold = -Inf,
     dr = "umap",
     norm = "diff",
@@ -944,7 +974,7 @@ clustify_nudge.Seurat <- function(input,
         ref_mat = ref_mat,
         cluster_col = cluster_col,
         query_genes = query_genes,
-        seurat_out = FALSE,
+        obj_out = FALSE,
         per_cell = FALSE,
         dr = dr
     )
@@ -981,8 +1011,8 @@ clustify_nudge.Seurat <- function(input,
 
     res <- resa[order(rownames(resa)), order(colnames(resa))] +
         resb[order(rownames(resb)), order(colnames(resb))] * weight
-
-    if (!(seurat_out || obj_out)) {
+    obj_out <- seurat_out
+    if (!obj_out) {
         res
     } else {
         df_temp <- cor_to_call(
@@ -1010,19 +1040,77 @@ clustify_nudge.Seurat <- function(input,
         input
     }
 }
+#' lookup table for single cell object structures
+#' @importFrom SummarizedExperiment colData<-
+#' @export
+object_loc_lookup <- function() {
+  l <- list()
+  
+  l$SingleCellExperiment <- c(
+    expr = function(x) object_data(x, "data"),
+    meta = function(x) object_data(x, "meta.data"),
+    add_meta = function(x, md) { 
+      colData(x) <- md
+      x},
+    var = NULL,
+    col = "cell_type1"
+  )
+  
+  l$Seurat <- c(
+    expr = function(x) object_data(x, "data"),
+    meta = function(x) object_data(x, "meta.data"),
+    add_meta = function(x, md) { 
+      x@meta.data <- md
+      x},
+    var = function(x) object_data(x, "var.genes"),
+    col = "RNA_snn_res.1"
+  )
+  
+  l$URD <- c(
+    expr = function(x) x@logupx.data,
+    meta = function(x) x@meta,
+    add_meta = function(x, md) { 
+      x@meta <- md
+      x},
+    var = function(x) x@var.genes,
+    col = "cluster"
+  )
+  
+  l$FunctionalSingleCellExperiment <- c(
+    expr = function(x) x@ExperimentList$rnaseq@assays$data$logcounts,
+    meta = function(x) x@ExperimentList$rnaseq@colData,
+    add_meta = function(x, md) { 
+      x@ExperimentList$rnaseq@colData <- md
+      x},
+    var = NULL,
+    col = "leiden_cluster"
+  )
+  
+  l$CellDataSet <- c(
+    expr = function(x) do.call(function(x) {row.names(x) <- x@featureData@data$gene_short_name; return(x)}, list(x@assayData$exprs)),
+    meta = function(x) as.data.frame(x@phenoData@data),
+    add_meta = function(x, md) { 
+      x@phenoData@data <- md
+      x},
+    var = function(x) as.character(x@featureData@data$gene_short_name[x@featureData@data$use_for_ordering == T]),
+    col = "Main_Cluster"
+  )
+  l
+}
 
 #' more flexible parsing of single cell objects
 #'
 #' @param input input object
 #' @param type look up predefined slots/loc
-#' @param expr_loc expression matrix location
-#' @param meta_loc metadata location
-#' @param var_loc variable genes location
+#' @param expr_loc function that extracts expression matrix 
+#' @param meta_loc function that extracts metadata 
+#' @param var_loc function that extracts variable genes 
 #' @param cluster_col column of clustering from metadata
-#' @param lookuptable if not supplied, will look in built-in table for object parsing
+#' @param lookuptable if not supplied, will use object_loc_lookup() for parsing. 
 #' @return list of expression, metadata, vargenes, cluster_col info from object
 #' @examples
-#' obj <- parse_loc_object(s_small3)
+#' so <- so_pbmc() 
+#' obj <- parse_loc_object(so)
 #' length(obj)
 #' @export
 parse_loc_object <- function(input,
@@ -1032,19 +1120,25 @@ parse_loc_object <- function(input,
     var_loc = NULL,
     cluster_col = NULL,
     lookuptable = NULL) {
+    if(!type %in% c("SingleCellExperiment", "Seurat")) {
+      warning("Support for ", type, " objects is deprecated ",
+              "and will be removed from clustifyr in the next version")
+    }
+    
     if (is.null(lookuptable)) {
-        object_loc_lookup1 <- clustifyr::object_loc_lookup
+        lookup <- object_loc_lookup()
     } else {
-        object_loc_lookup1 <- lookuptable
+        warning("Support for supplying custom objects is deprecated ",
+                "and will be removed from clustifyr in the next version")
+        lookup <- lookuptable
     }
 
-    if (length(intersect(type, colnames(object_loc_lookup1))) > 0) {
-        type <- intersect(type, colnames(object_loc_lookup1))[1]
+    if (type %in% names(lookup)) {
         parsed <- list(
-            eval(parse(text = object_loc_lookup1[[type]][1])),
-            as.data.frame(eval(parse(text = object_loc_lookup1[[type]][2]))),
-            eval(parse(text = object_loc_lookup1[[type]][3])),
-            object_loc_lookup1[[type]][4]
+            expr = lookup[[type]]$expr(input),
+            meta = as.data.frame(lookup[[type]]$meta(input)),
+            var = lookup[[type]]$var(input),
+            col = lookup[[type]]$col
         )
     } else {
         parsed <- list(NULL, NULL, NULL, NULL)
@@ -1053,18 +1147,15 @@ parse_loc_object <- function(input,
     names(parsed) <- c("expr", "meta", "var", "col")
 
     if (!(is.null(expr_loc))) {
-        parsed[["expr"]] <- eval(parse(text = paste0("input", expr_loc)))
+        parsed[["expr"]] <- expr_loc(input)
     }
 
     if (!(is.null(meta_loc))) {
-        parsed[["meta"]] <-
-            as.data.frame(eval(parse(text = paste0(
-                "input", meta_loc
-            ))))
+        parsed[["meta"]] <- as.data.frame(meta_loc(input))
     }
 
     if (!(is.null(var_loc))) {
-        parsed[["var"]] <- eval(parse(text = paste0("input", var_loc)))
+        parsed[["var"]] <- var_loc(input)
     }
 
     if (!(is.null(cluster_col))) {
@@ -1084,9 +1175,8 @@ parse_loc_object <- function(input,
 #' will look in built-in table for object parsing
 #' @return new object with new metadata inserted
 #' @examples
-#' \dontrun{
-#' insert_meta_object(s_small3, seurat_meta(s_small3, dr = "tsne"))
-#' }
+#' so <- so_pbmc()
+#' insert_meta_object(so, seurat_meta(so, dr = "umap"))
 #' @export
 insert_meta_object <- function(input,
     new_meta,
@@ -1094,16 +1184,15 @@ insert_meta_object <- function(input,
     meta_loc = NULL,
     lookuptable = NULL) {
     if (is.null(lookuptable)) {
-        object_loc_lookup1 <- clustifyr::object_loc_lookup
+        lookup <- object_loc_lookup()
     } else {
-        object_loc_lookup1 <- lookuptable
+        lookup <- lookuptable
     }
 
-    if (!type %in% colnames(object_loc_lookup1)) {
+    if (!type %in% names(lookup)) {
         stop("unrecognized object type", call. = FALSE)
     } else {
-        text1 <- paste0(object_loc_lookup1[[type]][2], " <- ", "new_meta")
-        eval(parse(text = text1))
+        input <- lookup[[type]]$add_meta(input, new_meta)
         return(input)
     }
 }
@@ -1180,7 +1269,7 @@ overcluster_test <- function(expr,
         metadata,
         query_genes = genes,
         cluster_col = cluster_col,
-        seurat_out = FALSE
+        obj_out = FALSE
     )
     res2 <- clustify(
         expr,
@@ -1188,7 +1277,7 @@ overcluster_test <- function(expr,
         metadata,
         query_genes = genes,
         cluster_col = "new_clusters",
-        seurat_out = FALSE
+        obj_out = FALSE
     )
     o1 <- plot_dims(
         metadata,
@@ -1993,38 +2082,20 @@ plot_rank_bias <- function(
 #' )
 #' @export
 append_genes <- function(gene_vector, ref_matrix) {
-    rownamesGSEMatrix <- rownames(ref_matrix)
-    # Get rownames from GSEMatrix (new GSE file)
-
-    rowCountHumanGenes <- length(gene_vector)
-    # Calculate number of rows from list of full human genes
-    rowCountNewGSEFile <- nrow(ref_matrix)
-    # Calculate number of rows of GSE matrix
-
-    missing_rows <- setdiff(gene_vector, rownamesGSEMatrix)
-    # Use setdiff function to figure out rows which are different/missing
-    # from GSE matrix
-
+    missing_rows <- setdiff(gene_vector, rownames(ref_matrix))
+    
     zeroExpressionMatrix <- matrix(
         0,
         nrow = length(missing_rows),
         ncol = ncol(ref_matrix)
     )
-    # Create a placeholder matrix with zeroes and missing_rows length
 
     rownames(zeroExpressionMatrix) <- missing_rows
-    # Assign row names
     colnames(zeroExpressionMatrix) <- colnames(ref_matrix)
-    # Assign column names
-
+    
     full_matrix <- rbind(ref_matrix, zeroExpressionMatrix)
-    # Bind GSEMatrix and zeroExpressionMatrix together
-
-    # Reorder matrix
     full_matrix <- full_matrix[gene_vector, ]
-    # Reorder fullMatrix to preserve gene order
-    return(full_matrix)
-    # Return fullMatrix
+    full_matrix
 }
 
 #' Given a count matrix, determine if the matrix has been either
