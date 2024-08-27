@@ -18,11 +18,11 @@ Useful links:
 
 }
 \author{
-\strong{Maintainer}: Kent Riemondy \email{kent.riemondy@gmail.com}
+\strong{Maintainer}: Rui Fu \email{ray.sinensis@gmail.com}
 
 Authors:
 \itemize{
-  \item Rui Fu \email{raysinensis@gmail.com}
+  \item Kent Riemondy \email{kent.riemondy@gmail.com}
 }
 
 Other contributors:
