@@ -36,7 +36,7 @@ list of expression, metadata, vargenes, cluster_col info from object
 more flexible parsing of single cell objects
 }
 \examples{
-so <- so_pbmc() 
+so <- so_pbmc()
 obj <- parse_loc_object(so)
 length(obj)
 }
