@@ -83,44 +83,48 @@ plot_best_call(
 
 ```{r example_seurat, warning=F, message=F}
 # for SingleCellExperiment
+sce_small <- sce_pbmc()
 clustify(
     input = sce_small, # an SCE object
     ref_mat = cbmc_ref, # matrix of RNA-seq expression data for each cell type
-    cluster_col = "cell_type1", # name of column in meta.data containing cell clusters
+    cluster_col = "cell_type", # name of column in meta.data containing cell clusters
     obj_out = TRUE # output SCE object with cell type inserted as "type" column
 )
 
+# for Seurat
 library(Seurat)
-# for Seurat3/4
+s_small <- so_pbmc()
 clustify(
-    input = s_small3,
-    cluster_col = "RNA_snn_res.1",
+    input = s_small,
+    cluster_col = "RNA_snn_res.0.5",
     ref_mat = cbmc_ref,
     seurat_out = TRUE
 )
 
 # New output option, directly as a vector (in the order of the metadata), which can then be inserted into metadata dataframes and other workflows
 clustify(
-    input = s_small3,
-    cluster_col = "RNA_snn_res.1",
+    input = s_small,
+    cluster_col = "RNA_snn_res.0.5",
     ref_mat = cbmc_ref,
     vec_out = TRUE
-)
+)[1:10]
 ```
 
 New reference matrix can be made directly from `SingleCellExperiment` and `Seurat` objects as well. Other scRNAseq experiment object types are supported as well.
 
 ```{r example_ref_matrix}
 # make reference from SingleCellExperiment objects
+sce_small <- sce_pbmc()
 sce_ref <- object_ref(
     input = sce_small, # SCE object
-    cluster_col = "cell_type1" # name of column in colData containing cell identities
+    cluster_col = "cell_type" # name of column in colData containing cell identities
 )
 
 # make reference from seurat objects
+s_small <- so_pbmc()
 s_ref <- seurat_ref(
-    seurat_object = s_small3,
-    cluster_col = "RNA_snn_res.1"
+    seurat_object = s_small,
+    cluster_col = "RNA_snn_res.0.5"
 )
 
 head(s_ref)
@@ -138,10 +142,10 @@ clustify_lists(
 )
 
 clustify_lists(
-    input = s_small3,
+    input = s_small,
     marker = pbmc_markers,
     marker_inmatrix = FALSE,
-    cluster_col = "RNA_snn_res.1",
+    cluster_col = "RNA_snn_res.0.5",
     seurat_out = TRUE
 )
 ```

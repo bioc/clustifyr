@@ -8,7 +8,7 @@
 coverage](https://codecov.io/gh/rnabioco/clustifyr/branch/devel/graph/badge.svg)](https://app.codecov.io/gh/rnabioco/clustifyr?branch=devel)
 [![platforms](https://bioconductor.org/shields/availability/release/clustifyr.svg)](https://bioconductor.org/packages/release/bioc/html/clustifyr.html)
 [![bioc](https://bioconductor.org/shields/years-in-bioc/clustifyr.svg)](https://bioconductor.org/packages/release/bioc/html/clustifyr.html)
-[![\#downloads](https://img.shields.io/badge/%23%20downloads-8045-brightgreen)](https://bioconductor.org/packages/stats/bioc/clustifyr/clustifyr_stats.tab)
+[![\#downloads](https://img.shields.io/badge/%23%20downloads-11608-brightgreen)](https://bioconductor.org/packages/stats/bioc/clustifyr/clustifyr_stats.tab)
 <!-- badges: end -->
 
 clustifyr classifies cells and clusters in single-cell RNA sequencing
@@ -51,10 +51,10 @@ library(clustifyr)
 
 # calculate correlation
 res <- clustify(
-  input = pbmc_matrix_small,
-  metadata = pbmc_meta$classified,
-  ref_mat = cbmc_ref,
-  query_genes = pbmc_vargenes
+    input = pbmc_matrix_small,
+    metadata = pbmc_meta$classified,
+    ref_mat = cbmc_ref,
+    query_genes = pbmc_vargenes
 )
 
 # print assignments
@@ -75,9 +75,9 @@ cor_to_call(res)
 
 # plot assignments on a projection
 plot_best_call(
-  cor_mat = res,
-  metadata = pbmc_meta,
-  cluster_col = "classified"
+    cor_mat = res,
+    metadata = pbmc_meta,
+    cluster_col = "classified"
 )
 ```
 
@@ -88,61 +88,50 @@ object (both v2 and v3) and assign identities.
 
 ``` r
 # for SingleCellExperiment
+sce_small <- sce_pbmc()
 clustify(
-  input = sce_small,          # an SCE object
-  ref_mat = cbmc_ref,         # matrix of RNA-seq expression data for each cell type
-  cluster_col = "cell_type1", # name of column in meta.data containing cell clusters
-  obj_out = TRUE              # output SCE object with cell type inserted as "type" column
-) 
+    input = sce_small, # an SCE object
+    ref_mat = cbmc_ref, # matrix of RNA-seq expression data for each cell type
+    cluster_col = "cell_type", # name of column in meta.data containing cell clusters
+    obj_out = TRUE # output SCE object with cell type inserted as "type" column
+)
 #> class: SingleCellExperiment 
-#> dim: 200 200 
+#> dim: 2000 2638 
 #> metadata(0):
 #> assays(2): counts logcounts
-#> rownames(200): SGIP1 AZIN2 ... TAF12 SNHG3
-#> rowData names(10): feature_symbol is_feature_control ... total_counts
-#>   log10_total_counts
-#> colnames(200): AZ_A1 AZ_A10 ... HP1502401_E18 HP1502401_E19
-#> colData names(35): cell_quality cell_type1 ... type r
-#> reducedDimNames(0):
+#> rownames(2000): PPBP LYZ ... CLIC2 HEMGN
+#> rowData names(0):
+#> colnames(2638): AAACATACAACCAC AAACATTGAGCTAC ... TTTGCATGAGAGGC
+#>   TTTGCATGCCTCAC
+#> colData names(8): cell_source sum ... type r
+#> reducedDimNames(1): UMAP
 #> mainExpName: NULL
 #> altExpNames(0):
 
+# for Seurat
 library(Seurat)
-# for Seurat3/4
+s_small <- so_pbmc()
 clustify(
-  input = s_small3,
-  cluster_col = "RNA_snn_res.1",
-  ref_mat = cbmc_ref,
-  seurat_out = TRUE
+    input = s_small,
+    cluster_col = "RNA_snn_res.0.5",
+    ref_mat = cbmc_ref,
+    seurat_out = TRUE
 )
 #> An object of class Seurat 
-#> 230 features across 80 samples within 1 assay 
-#> Active assay: RNA (230 features, 20 variable features)
-#>  2 dimensional reductions calculated: pca, tsne
+#> 2000 features across 2638 samples within 1 assay 
+#> Active assay: RNA (2000 features, 2000 variable features)
+#>  2 layers present: counts, data
+#>  1 dimensional reduction calculated: umap
 
 # New output option, directly as a vector (in the order of the metadata), which can then be inserted into metadata dataframes and other workflows
 clustify(
-  input = s_small3,
-  cluster_col = "RNA_snn_res.1",
-  ref_mat = cbmc_ref,
-  vec_out = TRUE
-)
-#>  [1] "Mk"         "Mk"         "Mk"         "Mk"         "Mk"        
-#>  [6] "Mk"         "Mk"         "Mk"         "Mk"         "Mk"        
-#> [11] "B"          "B"          "B"          "B"          "B"         
-#> [16] "B"          "B"          "B"          "B"          "B"         
-#> [21] "CD16+ Mono" "CD16+ Mono" "CD16+ Mono" "CD16+ Mono" "CD16+ Mono"
-#> [26] "CD16+ Mono" "CD16+ Mono" "CD16+ Mono" "CD16+ Mono" "CD16+ Mono"
-#> [31] "Mk"         "B"          "Mk"         "Mk"         "Mk"        
-#> [36] "Mk"         "Mk"         "Mk"         "Mk"         "Mk"        
-#> [41] "Mk"         "B"          "Mk"         "Mk"         "B"         
-#> [46] "B"          "Mk"         "Mk"         "Mk"         "Mk"        
-#> [51] "CD16+ Mono" "CD16+ Mono" "B"          "CD16+ Mono" "CD16+ Mono"
-#> [56] "CD16+ Mono" "CD16+ Mono" "CD16+ Mono" "CD16+ Mono" "Mk"        
-#> [61] "B"          "CD16+ Mono" "B"          "CD16+ Mono" "B"         
-#> [66] "CD16+ Mono" "CD16+ Mono" "CD16+ Mono" "CD16+ Mono" "B"         
-#> [71] "Mk"         "Mk"         "Mk"         "Mk"         "Mk"        
-#> [76] "Mk"         "Mk"         "Mk"         "Mk"         "CD16+ Mono"
+    input = s_small,
+    cluster_col = "RNA_snn_res.0.5",
+    ref_mat = cbmc_ref,
+    vec_out = TRUE
+)[1:10]
+#>  [1] "CD4 T"      "B"          "CD4 T"      "CD14+ Mono" "NK"        
+#>  [6] "CD4 T"      "NK"         "NK"         "CD4 T"      "CD16+ Mono"
 ```
 
 New reference matrix can be made directly from `SingleCellExperiment`
@@ -151,26 +140,34 @@ supported as well.
 
 ``` r
 # make reference from SingleCellExperiment objects
+sce_small <- sce_pbmc()
 sce_ref <- object_ref(
-  input = sce_small,               # SCE object
-  cluster_col = "cell_type1"       # name of column in colData containing cell identities
+    input = sce_small, # SCE object
+    cluster_col = "cell_type" # name of column in colData containing cell identities
 )
-#> The following clusters have less than 10 cells for this analysis: co-expression, ductal, endothelial, epsilon, MHC class II, PSC. Classification is likely inaccurate.
 
 # make reference from seurat objects
+s_small <- so_pbmc()
 s_ref <- seurat_ref(
-  seurat_object = s_small3,
-  cluster_col = "RNA_snn_res.1"
+    seurat_object = s_small,
+    cluster_col = "RNA_snn_res.0.5"
 )
 
 head(s_ref)
-#>                 0        1        2
-#> MS4A1    0.000000 1.126047 5.151065
-#> CD79B    2.469341 2.920407 5.031316
-#> CD79A    0.000000 2.535151 5.375681
-#> HLA-DRA  3.640368 6.008446 7.055386
-#> TCL1A    0.000000 1.495867 4.963367
-#> HLA-DQB1 1.603068 3.836290 5.137422
+#>                 0          1          2          3          4         5
+#> PPBP   0.04883837 0.06494743 0.28763857 0.09375021 0.35662599 0.2442300
+#> LYZ    1.40165143 1.39466552 5.21550849 1.42699419 1.35146753 3.4034309
+#> S100A9 0.55679700 0.58080250 4.91453355 0.62123058 0.58823794 2.6277996
+#> IGLL5  0.03116080 0.04826212 0.02434753 2.44576997 0.03284986 0.2581198
+#> GNLY   0.46041901 0.41001072 0.53592906 0.37877736 2.53161887 0.2903092
+#> FTL    3.35611600 3.31062958 5.86217774 3.66698837 3.37056910 5.9518479
+#>                 6          7         8
+#> PPBP   0.00000000 0.06527347 6.0941782
+#> LYZ    1.32701580 4.84714962 2.5303912
+#> S100A9 0.52098541 2.53310734 1.6775692
+#> IGLL5  0.05247669 0.10986617 0.2501642
+#> GNLY   4.70481754 0.46959958 0.3845813
+#> FTL    3.38471536 4.21848878 4.5508242
 ```
 
 `clustify_lists()` handles identity assignment of matrix or
@@ -178,11 +175,11 @@ head(s_ref)
 
 ``` r
 clustify_lists(
-  input = pbmc_matrix_small,
-  metadata = pbmc_meta,
-  cluster_col = "classified",
-  marker = pbmc_markers,
-  marker_inmatrix = FALSE
+    input = pbmc_matrix_small,
+    metadata = pbmc_meta,
+    cluster_col = "classified",
+    marker = pbmc_markers,
+    marker_inmatrix = FALSE
 )
 #>                      0        1        2         3         4        5        6
 #> Naive CD4 T  1.5639055 20.19469 31.77095  8.664074 23.844992 19.06931 19.06931
@@ -206,16 +203,17 @@ clustify_lists(
 #> Platelet     19.492465 59.9493793
 
 clustify_lists(
-  input = s_small3,
-  marker = pbmc_markers,
-  marker_inmatrix = FALSE,
-  cluster_col = "RNA_snn_res.1",
-  seurat_out = TRUE
+    input = s_small,
+    marker = pbmc_markers,
+    marker_inmatrix = FALSE,
+    cluster_col = "RNA_snn_res.0.5",
+    seurat_out = TRUE
 )
 #> An object of class Seurat 
-#> 230 features across 80 samples within 1 assay 
-#> Active assay: RNA (230 features, 20 variable features)
-#>  2 dimensional reductions calculated: pca, tsne
+#> 2000 features across 2638 samples within 1 assay 
+#> Active assay: RNA (2000 features, 2000 variable features)
+#>  2 layers present: counts, data
+#>  1 dimensional reduction calculated: umap
 ```
 
 ## Additional resources
